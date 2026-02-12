@@ -12,3 +12,6 @@ wheels/
 # Large binary files
 *.pdf
 deploy.zip
+
+# Raw source data (rebuild with: uv run python ingest.py)
+P3DH downloads/*.csv
