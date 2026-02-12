@@ -120,11 +120,11 @@ _irr = DF[DF.file == "k_68.00"].copy()
 _irr["rc"] = _clean(_irr["row_label"])
 IRR_EVE = _irr[
     _irr.col_label.str.contains("economic value", case=False, na=False)
-    & _irr.col_label.str.contains("Current|a\\.", case=False, na=False, regex=True)
+    & _irr.col_code.str.contains("Current", case=False, na=False)
 ].copy()
 IRR_NII = _irr[
     _irr.col_label.str.contains("net interest", case=False, na=False)
-    & _irr.col_label.str.contains("Current|c\\.", case=False, na=False, regex=True)
+    & _irr.col_code.str.contains("Current", case=False, na=False)
 ].copy()
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -453,28 +453,56 @@ def fig_nmd_outflow_rates() -> go.Figure:
 
 
 def fig_nmd_trend(weighted: bool = False) -> go.Figure:
+    """Stacked bar chart: Stable + Less Stable NMD across periods.
+
+    Retail & SME is the sum of the two, shown as a total annotation.
+    """
     wt = "Weighted" if weighted else "Unweighted"
-    d = _nmd_ts[(_nmd_ts.weight == wt) & _nmd_ts.period.isin(["T-3", "T-2", "T-1", "T"])]
+    # Only use the sub-components (Stable & Less Stable), not the Retail total
+    _sub_rows = ["3. Stable deposits", "4. Less stable deposits"]
+    d = _nmd_ts[
+        (_nmd_ts.weight == wt)
+        & _nmd_ts.period.isin(["T-3", "T-2", "T-1", "T"])
+        & _nmd_ts.rc.isin(_sub_rows)
+    ]
     if d.empty:
         return go.Figure().update_layout(title="No trend data")
     d = d.copy()
     d["value_bn"] = d.factNumeric / 1e9
-    d["period"] = pd.Categorical(d.period, categories=["T-3", "T-2", "T-1", "T"], ordered=True)
+    period_order = ["T-3", "T-2", "T-1", "T"]
+    d["period"] = pd.Categorical(d.period, categories=period_order, ordered=True)
     d = d.sort_values("period")
-    fmt = "%{text:.2f}bn" if weighted else "%{text:.1f}bn"
-    fig = px.line(
-        d, x="period", y="value_bn", color="short",
-        markers=True, text="value_bn",
-        color_discrete_sequence=[KBC_GREEN, ZANDERS_BLUE, ACCENT_TEAL],
-    )
-    fig.update_traces(texttemplate=fmt, textposition="top center", textfont=dict(size=10))
+
+    colors = {"Stable NMD": KBC_GREEN, "Less Stable NMD": ACCENT_ORANGE}
+    fig = go.Figure()
+    for label in ["Stable NMD", "Less Stable NMD"]:
+        sub = d[d.short == label]
+        fig.add_trace(go.Bar(
+            x=sub.period.astype(str), y=sub.value_bn, name=label,
+            marker_color=colors[label],
+            text=sub.value_bn.apply(lambda v: f"€{v:,.1f}bn"),
+            textposition="inside", textfont=dict(size=10, color="white"),
+        ))
+
+    # Add total annotation on top of each stacked bar
+    totals = d.groupby("period", observed=True)["value_bn"].sum()
+    for p in period_order:
+        if p in totals.index:
+            fig.add_annotation(
+                x=p, y=totals[p], text=f"€{totals[p]:,.1f}bn",
+                showarrow=False, font=dict(size=11, color=ZANDERS_BLUE),
+                yshift=12,
+            )
+
     lbl = "Weighted" if weighted else "Unweighted"
     fig.update_layout(
-        title=dict(text=f"NMD {'Outflow' if weighted else 'Volume'} Trend – {lbl} (EU LIQ1)",
-                   font=dict(size=14)),
+        title=dict(
+            text=f"NMD {'Outflow' if weighted else 'Volume'} Trend – {lbl} (EU LIQ1)",
+            font=dict(size=14)),
         xaxis_title="Period", yaxis_title="EUR billions",
+        barmode="stack",
         legend=dict(title="", orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        height=380, **CHART_LAYOUT,
+        height=400, **CHART_LAYOUT,
     )
     return fig
 
@@ -594,27 +622,45 @@ with tab_nmd:
     left.plotly_chart(fig_nmd_unweighted_vs_weighted(), use_container_width=True)
     right.plotly_chart(fig_deposit_composition(), use_container_width=True)
 
-    # Charts row 2
-    st.subheader("Outflow Rates & Trends")
-    left, right = st.columns(2)
-    left.plotly_chart(fig_nmd_outflow_rates(), use_container_width=True)
-    right.plotly_chart(fig_nmd_trend(weighted=False), use_container_width=True)
-
-    # Weighted trend
-    st.plotly_chart(fig_nmd_trend(weighted=True), use_container_width=True)
-
-    # Raw data
-    st.subheader("NMD Raw Data")
-    d = _lcr[_lcr.rc.isin(_DEPOSIT_ROWS)].copy()
-    d["Category"] = d.rc.map(_SHORT)
-    d["Period"] = d.period
-    d["Type"] = d.weight
-    d["Value (€bn)"] = d.factNumeric.apply(lambda v: f"{v/1e9:,.2f}" if pd.notna(v) else "")
-    st.dataframe(
-        d[["Category", "Period", "Type", "Value (€bn)"]].sort_values(
-            ["Category", "Type", "Period"]),
-        use_container_width=True, hide_index=True, height=500,
+    # Explanation box
+    st.info(
+        "**Unweighted vs Weighted – what does it mean?**\n\n"
+        "In the LCR framework, **unweighted** values are the gross (nominal) deposit amounts "
+        "reported by KBC. **Weighted** values are the *regulatory outflow amounts* after applying "
+        "EBA-prescribed run-off rates that reflect the likelihood of depositors withdrawing "
+        "funds during a 30-day stress scenario.\n\n"
+        "• **Stable NMD** (e.g. insured retail deposits in long-standing relationships) receive "
+        "a low outflow rate (typically 5%), meaning regulators assume most funds stay.\n"
+        "• **Less Stable NMD** (e.g. high-value or internet-only deposits) get a higher rate "
+        "(typically 10-15%), implying more expected outflows under stress.\n\n"
+        "The *outflow rate* = Weighted ÷ Unweighted. A lower rate means the deposits are "
+        "considered stickier and more favourable for the bank's LCR.",
+        icon="💡",
     )
+
+    # Charts row 2: outflow rates
+    st.subheader("Outflow Rates")
+    st.plotly_chart(fig_nmd_outflow_rates(), use_container_width=True)
+
+    # Charts row 3: stacked bar trends (UW and W side by side)
+    st.subheader("NMD Trends across Periods")
+    st.caption("Stable + Less Stable NMD stacked per quarter (Retail & SME total shown above bars)")
+    left, right = st.columns(2)
+    left.plotly_chart(fig_nmd_trend(weighted=False), use_container_width=True)
+    right.plotly_chart(fig_nmd_trend(weighted=True), use_container_width=True)
+
+    # Raw data – collapsed
+    with st.expander("📋 NMD Raw Data", expanded=False):
+        d = _lcr[_lcr.rc.isin(_DEPOSIT_ROWS)].copy()
+        d["Category"] = d.rc.map(_SHORT)
+        d["Period"] = d.period
+        d["Type"] = d.weight
+        d["Value (€bn)"] = d.factNumeric.apply(lambda v: f"{v/1e9:,.2f}" if pd.notna(v) else "")
+        st.dataframe(
+            d[["Category", "Period", "Type", "Value (€bn)"]].sort_values(
+                ["Category", "Type", "Period"]),
+            use_container_width=True, hide_index=True, height=500,
+        )
 
 # ── TAB 3: Data Explorer ─────────────────────────────────────────────────────
 with tab_explorer:
@@ -635,7 +681,8 @@ with tab_explorer:
     display["Value"] = display["Value"].apply(
         lambda v: f"{float(v):,.2f}" if pd.notna(pd.to_numeric(v, errors="coerce")) else v
     )
-    st.dataframe(display, use_container_width=True, hide_index=True, height=600)
+    with st.expander(f"📋 {group} – {len(display)} rows", expanded=True):
+        st.dataframe(display, use_container_width=True, hide_index=True, height=600)
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.divider()
