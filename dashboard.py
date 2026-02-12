@@ -22,19 +22,128 @@ st.set_page_config(
 )
 
 # ── Colour palette ─────────────────────────────────────────────────────────────
-ZANDERS_BLUE = "#003366"
-ZANDERS_LIGHT = "#0066aa"
-KBC_GREEN = "#00A651"
-ACCENT_TEAL = "#17a2b8"
-ACCENT_RED = "#cc3333"
-ACCENT_ORANGE = "#e67e22"
+ZANDERS_BLUE = "#1B2A4A"
+ZANDERS_LIGHT = "#3A7BD5"
+KBC_GREEN = "#00C853"
+ACCENT_TEAL = "#26C6DA"
+ACCENT_RED = "#EF5350"
+ACCENT_ORANGE = "#FFA726"
+ACCENT_PURPLE = "#AB47BC"
+SUBTLE_GRAY = "#90A4AE"
+CARD_BG = "rgba(255,255,255,0.04)"
 
 CHART_LAYOUT = dict(
-    template="plotly_white",
-    font=dict(family="Segoe UI, sans-serif", size=12),
-    margin=dict(l=10, r=20, t=45, b=30),
-    plot_bgcolor="white",
+    template="plotly_dark",
+    font=dict(family="Inter, Segoe UI, sans-serif", size=12, color="#E0E0E0"),
+    margin=dict(l=10, r=20, t=50, b=30),
+    plot_bgcolor="rgba(0,0,0,0)",
+    paper_bgcolor="rgba(0,0,0,0)",
 )
+
+# ── Custom CSS ─────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+/* Import Inter font */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Global font */
+html, body, [class*="css"] {
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+/* Metric cards */
+[data-testid="stMetric"] {
+    background: linear-gradient(135deg, rgba(58,123,213,0.10), rgba(0,200,83,0.06));
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 16px 20px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+[data-testid="stMetric"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    border-color: rgba(58,123,213,0.3);
+}
+[data-testid="stMetric"] [data-testid="stMetricLabel"] {
+    font-size: 0.78rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.7;
+}
+[data-testid="stMetric"] [data-testid="stMetricValue"] {
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+/* Tab styling */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 12px;
+    padding: 4px;
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius: 8px;
+    padding: 10px 24px;
+    font-weight: 500;
+}
+.stTabs [aria-selected="true"] {
+    background: linear-gradient(135deg, #3A7BD5, #1B2A4A) !important;
+}
+
+/* Dividers */
+hr {
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(58,123,213,0.3), transparent);
+    margin: 1.5rem 0;
+}
+
+/* Subheaders */
+.stMarkdown h3 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-bottom: 0.25rem;
+}
+
+/* Expander styling */
+.streamlit-expanderHeader {
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+/* Info box */
+[data-testid="stAlert"] {
+    border-radius: 10px;
+    border-left-width: 4px;
+}
+
+/* Plotly chart containers */
+[data-testid="stPlotlyChart"] {
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.02);
+    padding: 4px;
+    transition: border-color 0.2s ease;
+}
+[data-testid="stPlotlyChart"]:hover {
+    border-color: rgba(58,123,213,0.2);
+}
+
+/* Dataframe styling */
+[data-testid="stDataFrame"] {
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* Caption styling */
+.stCaption {
+    opacity: 0.6;
+}
+</style>
+""", unsafe_allow_html=True)
 
 
 # ── Data loading (cached) ─────────────────────────────────────────────────────
@@ -196,16 +305,23 @@ def fig_capital_stack() -> go.Figure:
     if CAP_AMOUNTS.empty:
         return go.Figure()
     d = CAP_AMOUNTS.sort_values("value_bn")
+    colors = [KBC_GREEN, ZANDERS_LIGHT, ZANDERS_BLUE]
     fig = go.Figure(go.Bar(
         x=d.value_bn, y=d.label, orientation="h",
         text=d.value_bn.apply(lambda v: f"€{v:,.1f}bn"),
-        textposition="outside", textfont=dict(size=11),
-        marker_color=[KBC_GREEN, ZANDERS_LIGHT, ZANDERS_BLUE],
+        textposition="outside", textfont=dict(size=12, color="#E0E0E0"),
+        marker=dict(
+            color=colors,
+            line=dict(width=0),
+            cornerradius=4,
+        ),
+        hovertemplate="<b>%{y}</b><br>€%{x:,.2f}bn<extra></extra>",
     ))
     fig.update_layout(
-        title=dict(text="Own Funds (EU KM1)", font=dict(size=14)),
-        xaxis_title="EUR billions", yaxis_title="",
-        showlegend=False, height=280, **CHART_LAYOUT,
+        title=dict(text="Own Funds (EU KM1)", font=dict(size=15, color="#ffffff")),
+        xaxis=dict(title="EUR billions", gridcolor="rgba(255,255,255,0.06)"),
+        yaxis_title="",
+        showlegend=False, height=300, **CHART_LAYOUT,
     )
     return fig
 
@@ -220,16 +336,22 @@ def fig_capital_ratios() -> go.Figure:
         fig.add_trace(go.Bar(
             x=[row.label], y=[row.value_pct],
             text=[f"{row.value_pct:.1f}%"], textposition="outside",
-            textfont=dict(size=12, color=colors[i]),
-            marker_color=colors[i], name=row.label, showlegend=False,
+            textfont=dict(size=13, color=colors[i], weight="bold"),
+            marker=dict(color=colors[i], cornerradius=6, line=dict(width=0)),
+            name=row.label, showlegend=False,
+            hovertemplate="<b>%{x}</b><br>%{y:.2f}%<extra></extra>",
+            width=0.5,
         ))
-    fig.add_hline(y=4.5, line_dash="dot", line_color=ACCENT_RED, line_width=1.5,
-                  annotation=dict(text="CET1 min 4.5%", font=dict(size=10, color=ACCENT_RED)))
-    fig.add_hline(y=8.0, line_dash="dot", line_color=ACCENT_ORANGE, line_width=1.5,
-                  annotation=dict(text="Total min 8%", font=dict(size=10, color=ACCENT_ORANGE)))
+    fig.add_hline(y=4.5, line_dash="dash", line_color=ACCENT_RED, line_width=2,
+                  annotation=dict(text="CET1 min 4.5%", font=dict(size=10, color=ACCENT_RED),
+                                  bgcolor="rgba(239,83,80,0.15)", borderpad=3))
+    fig.add_hline(y=8.0, line_dash="dash", line_color=ACCENT_ORANGE, line_width=2,
+                  annotation=dict(text="Total min 8%", font=dict(size=10, color=ACCENT_ORANGE),
+                                  bgcolor="rgba(255,167,38,0.15)", borderpad=3))
     fig.update_layout(
-        title=dict(text="Capital Ratios vs Regulatory Minimums", font=dict(size=14)),
-        yaxis=dict(title="%", range=[0, max(d.value_pct) * 1.25]),
+        title=dict(text="Capital Ratios vs Regulatory Minimums", font=dict(size=15, color="#ffffff")),
+        yaxis=dict(title="%", range=[0, max(d.value_pct) * 1.25], gridcolor="rgba(255,255,255,0.06)"),
+        xaxis=dict(gridcolor="rgba(255,255,255,0.06)"),
         showlegend=False, height=340, **CHART_LAYOUT,
     )
     return fig
@@ -242,16 +364,20 @@ def fig_rwa_breakdown() -> go.Figure:
     data["value_bn"] = data.factNumeric / 1e9
     data = data.sort_values("value_bn", ascending=True)
     n = len(data)
-    colors = px.colors.sequential.Teal_r[:n] if n <= len(px.colors.sequential.Teal_r) else None
+    # Generate a gradient from teal to blue
+    palette = [ACCENT_TEAL, ZANDERS_LIGHT, KBC_GREEN, ZANDERS_BLUE, ACCENT_PURPLE, ACCENT_ORANGE]
+    colors = (palette * ((n // len(palette)) + 1))[:n]
     fig = go.Figure(go.Bar(
         x=data.value_bn, y=data.label, orientation="h",
         text=data.value_bn.apply(lambda v: f"€{v:,.1f}bn"),
-        textposition="outside", textfont=dict(size=11),
-        marker_color=colors,
+        textposition="outside", textfont=dict(size=11, color="#E0E0E0"),
+        marker=dict(color=colors, cornerradius=4, line=dict(width=0)),
+        hovertemplate="<b>%{y}</b><br>€%{x:,.2f}bn<extra></extra>",
     ))
     fig.update_layout(
-        title=dict(text="TREA by Risk Type (EU OV1)", font=dict(size=14)),
-        xaxis_title="EUR billions", yaxis_title="",
+        title=dict(text="TREA by Risk Type (EU OV1)", font=dict(size=15, color="#ffffff")),
+        xaxis=dict(title="EUR billions", gridcolor="rgba(255,255,255,0.06)"),
+        yaxis_title="",
         showlegend=False, height=380, **CHART_LAYOUT,
     )
     return fig
@@ -282,17 +408,20 @@ def fig_cr8_waterfall() -> go.Figure:
         x=labels, y=values, measure=measures,
         text=[f"€{v:+,.1f}bn" if m == "relative" else f"€{v:,.1f}bn"
               for v, m in zip(values, measures)],
-        textposition="outside", textfont=dict(size=10),
+        textposition="outside", textfont=dict(size=10, color="#E0E0E0"),
         increasing_marker_color=KBC_GREEN,
         decreasing_marker_color=ACCENT_RED,
         totals_marker_color=ZANDERS_BLUE,
-        connector_line_color="#ccc",
+        connector_line_color="rgba(255,255,255,0.15)",
     ))
     fig.update_layout(
-        title=dict(text="Credit Risk RWEA Flows (EU CR8)", font=dict(size=14)),
-        yaxis_title="EUR billions", height=380,
-        template="plotly_white", font=dict(family="Segoe UI, sans-serif", size=12),
-        plot_bgcolor="white", margin=dict(l=10, r=20, t=45, b=70),
+        title=dict(text="Credit Risk RWEA Flows (EU CR8)", font=dict(size=15, color="#ffffff")),
+        yaxis=dict(title="EUR billions", gridcolor="rgba(255,255,255,0.06)"),
+        height=380,
+        template="plotly_dark",
+        font=dict(family="Inter, Segoe UI, sans-serif", size=12, color="#E0E0E0"),
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=10, r=20, t=50, b=70),
     )
     return fig
 
@@ -327,16 +456,20 @@ def fig_mr2_total() -> go.Figure:
         x=labels, y=values, measure=measures,
         text=[f"€{v:+,.2f}bn" if m == "relative" else f"€{v:,.2f}bn"
               for v, m in zip(values, measures)],
-        textposition="outside", textfont=dict(size=10),
+        textposition="outside", textfont=dict(size=10, color="#E0E0E0"),
         increasing_marker_color=KBC_GREEN,
         decreasing_marker_color=ACCENT_RED,
         totals_marker_color=ZANDERS_BLUE,
+        connector_line_color="rgba(255,255,255,0.15)",
     ))
     fig.update_layout(
-        title=dict(text="Market Risk RWEA Flows (EU MR2-B)", font=dict(size=14)),
-        yaxis_title="EUR billions", height=380,
-        template="plotly_white", font=dict(family="Segoe UI, sans-serif", size=12),
-        plot_bgcolor="white", margin=dict(l=10, r=20, t=45, b=70),
+        title=dict(text="Market Risk RWEA Flows (EU MR2-B)", font=dict(size=15, color="#ffffff")),
+        yaxis=dict(title="EUR billions", gridcolor="rgba(255,255,255,0.06)"),
+        height=380,
+        template="plotly_dark",
+        font=dict(family="Inter, Segoe UI, sans-serif", size=12, color="#E0E0E0"),
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=10, r=20, t=50, b=70),
     )
     return fig
 
@@ -346,21 +479,26 @@ def fig_irrbb() -> go.Figure:
     if not IRR_EVE.empty:
         fig.add_trace(go.Bar(
             x=IRR_EVE.rc, y=IRR_EVE.factNumeric / 1e6,
-            name="ΔEVE", marker_color=ZANDERS_BLUE,
+            name="ΔEVE", marker=dict(color=ZANDERS_LIGHT, cornerradius=4),
             text=IRR_EVE.factNumeric.apply(lambda v: f"€{v/1e6:,.0f}m"),
-            textposition="outside", textfont=dict(size=10),
+            textposition="outside", textfont=dict(size=10, color="#E0E0E0"),
+            hovertemplate="<b>%{x}</b><br>ΔEVE: €%{y:,.0f}m<extra></extra>",
         ))
     if not IRR_NII.empty:
         fig.add_trace(go.Bar(
             x=IRR_NII.rc, y=IRR_NII.factNumeric / 1e6,
-            name="ΔNII", marker_color=KBC_GREEN,
+            name="ΔNII", marker=dict(color=KBC_GREEN, cornerradius=4),
             text=IRR_NII.factNumeric.apply(lambda v: f"€{v/1e6:,.0f}m"),
-            textposition="outside", textfont=dict(size=10),
+            textposition="outside", textfont=dict(size=10, color="#E0E0E0"),
+            hovertemplate="<b>%{x}</b><br>ΔNII: €%{y:,.0f}m<extra></extra>",
         ))
     fig.update_layout(
-        title=dict(text="IRRBB Sensitivities – EVE vs NII (EU IRRBB1)", font=dict(size=14)),
-        yaxis_title="EUR millions", barmode="group",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        title=dict(text="IRRBB Sensitivities – EVE vs NII (EU IRRBB1)", font=dict(size=15, color="#ffffff")),
+        yaxis=dict(title="EUR millions", gridcolor="rgba(255,255,255,0.06)"),
+        xaxis=dict(gridcolor="rgba(255,255,255,0.06)"),
+        barmode="group",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+                    font=dict(size=11)),
         height=380, **CHART_LAYOUT,
     )
     return fig
@@ -370,7 +508,7 @@ def fig_liquidity_gauges() -> go.Figure:
     fig = go.Figure()
     for val, title, col, dom_x in [
         (LCR_PCT, "LCR", KBC_GREEN, [0, 0.3]),
-        (NSFR_PCT, "NSFR", ZANDERS_BLUE, [0.35, 0.65]),
+        (NSFR_PCT, "NSFR", ZANDERS_LIGHT, [0.35, 0.65]),
         (LEV_PCT, "Leverage", ACCENT_TEAL, [0.7, 1]),
     ]:
         mx = 250 if "LCR" in title else 200 if "NSFR" in title else 10
@@ -378,20 +516,27 @@ def fig_liquidity_gauges() -> go.Figure:
         fig.add_trace(go.Indicator(
             mode="gauge+number",
             value=val,
-            number={"suffix": "%", "font": {"size": 22}},
-            title={"text": title, "font": {"size": 14}},
+            number={"suffix": "%", "font": {"size": 26, "color": "#ffffff"}},
+            title={"text": title, "font": {"size": 15, "color": "#B0BEC5"}},
             gauge={
-                "axis": {"range": [0, mx], "tickfont": {"size": 10}},
-                "bar": {"color": col},
+                "axis": {"range": [0, mx], "tickfont": {"size": 10, "color": "#78909C"},
+                         "tickcolor": "rgba(255,255,255,0.1)"},
+                "bar": {"color": col, "thickness": 0.75},
+                "bgcolor": "rgba(255,255,255,0.03)",
+                "borderwidth": 0,
                 "steps": [
-                    {"range": [0, thresh], "color": "#ffe0e0"},
-                    {"range": [thresh, mx], "color": "#e0ffe0"},
+                    {"range": [0, thresh], "color": "rgba(239,83,80,0.12)"},
+                    {"range": [thresh, mx], "color": "rgba(0,200,83,0.08)"},
                 ],
                 "threshold": {"line": {"color": ACCENT_RED, "width": 2}, "value": thresh},
             },
             domain={"x": dom_x, "y": [0, 1]},
         ))
-    fig.update_layout(height=250, margin=dict(l=20, r=20, t=30, b=10))
+    fig.update_layout(
+        height=270,
+        margin=dict(l=20, r=20, t=30, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+    )
     return fig
 
 
@@ -406,22 +551,27 @@ def fig_nmd_unweighted_vs_weighted() -> go.Figure:
     if not uw.empty:
         fig.add_trace(go.Bar(
             x=uw.short, y=uw.factNumeric / 1e9,
-            name="Unweighted (gross)", marker_color=ZANDERS_LIGHT,
+            name="Unweighted (gross)", marker=dict(color=ZANDERS_LIGHT, cornerradius=4),
             text=uw.factNumeric.apply(lambda v: f"€{v/1e9:,.1f}bn"),
-            textposition="outside", textfont=dict(size=10),
+            textposition="outside", textfont=dict(size=10, color="#E0E0E0"),
+            hovertemplate="<b>%{x}</b><br>Unweighted: €%{y:,.2f}bn<extra></extra>",
         ))
     if not w.empty:
         fig.add_trace(go.Bar(
             x=w.short, y=w.factNumeric / 1e9,
-            name="Weighted (net outflow)", marker_color=KBC_GREEN,
+            name="Weighted (net outflow)", marker=dict(color=KBC_GREEN, cornerradius=4),
             text=w.factNumeric.apply(lambda v: f"€{v/1e9:,.1f}bn"),
-            textposition="outside", textfont=dict(size=10),
+            textposition="outside", textfont=dict(size=10, color="#E0E0E0"),
+            hovertemplate="<b>%{x}</b><br>Weighted: €%{y:,.2f}bn<extra></extra>",
         ))
     fig.update_layout(
         title=dict(text="LCR Deposit Outflows – Unweighted vs Weighted (Period T)",
-                   font=dict(size=14)),
-        yaxis_title="EUR billions", barmode="group",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                   font=dict(size=15, color="#ffffff")),
+        yaxis=dict(title="EUR billions", gridcolor="rgba(255,255,255,0.06)"),
+        xaxis=dict(gridcolor="rgba(255,255,255,0.06)"),
+        barmode="group",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+                    font=dict(size=11)),
         height=420, **CHART_LAYOUT,
     )
     return fig
@@ -440,13 +590,18 @@ def fig_nmd_outflow_rates() -> go.Figure:
     fig = go.Figure(go.Bar(
         x=rates.rate, y=rates.short, orientation="h",
         text=rates.rate.apply(lambda v: f"{v:.1f}%"),
-        textposition="outside", textfont=dict(size=11),
-        marker_color=[KBC_GREEN if r < 10 else ACCENT_ORANGE if r < 30 else ACCENT_RED
-                      for r in rates.rate],
+        textposition="outside", textfont=dict(size=11, color="#E0E0E0"),
+        marker=dict(
+            color=[KBC_GREEN if r < 10 else ACCENT_ORANGE if r < 30 else ACCENT_RED
+                   for r in rates.rate],
+            cornerradius=4,
+        ),
+        hovertemplate="<b>%{y}</b><br>Outflow rate: %{x:.1f}%<extra></extra>",
     ))
     fig.update_layout(
-        title=dict(text="LCR Outflow Rates by Deposit Type (Period T)", font=dict(size=14)),
-        xaxis=dict(title="Outflow Rate (%)", range=[0, max(rates.rate) * 1.3]),
+        title=dict(text="LCR Outflow Rates by Deposit Type (Period T)", font=dict(size=15, color="#ffffff")),
+        xaxis=dict(title="Outflow Rate (%)", range=[0, max(rates.rate) * 1.3],
+                   gridcolor="rgba(255,255,255,0.06)"),
         yaxis_title="", showlegend=False, height=380, **CHART_LAYOUT,
     )
     return fig
@@ -479,9 +634,10 @@ def fig_nmd_trend(weighted: bool = False) -> go.Figure:
         sub = d[d.short == label]
         fig.add_trace(go.Bar(
             x=sub.period.astype(str), y=sub.value_bn, name=label,
-            marker_color=colors[label],
+            marker=dict(color=colors[label], cornerradius=3),
             text=sub.value_bn.apply(lambda v: f"€{v:,.1f}bn"),
             textposition="inside", textfont=dict(size=10, color="white"),
+            hovertemplate="<b>%{x}</b><br>" + label + ": €%{y:,.2f}bn<extra></extra>",
         ))
 
     # Add total annotation on top of each stacked bar
@@ -498,10 +654,12 @@ def fig_nmd_trend(weighted: bool = False) -> go.Figure:
     fig.update_layout(
         title=dict(
             text=f"NMD {'Outflow' if weighted else 'Volume'} Trend – {lbl} (EU LIQ1)",
-            font=dict(size=14)),
-        xaxis_title="Period", yaxis_title="EUR billions",
+            font=dict(size=15, color="#ffffff")),
+        xaxis=dict(title="Period", gridcolor="rgba(255,255,255,0.06)"),
+        yaxis=dict(title="EUR billions", gridcolor="rgba(255,255,255,0.06)"),
         barmode="stack",
-        legend=dict(title="", orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(title="", orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+                    font=dict(size=11)),
         height=400, **CHART_LAYOUT,
     )
     return fig
@@ -513,17 +671,23 @@ def fig_deposit_composition() -> go.Figure:
         return go.Figure().update_layout(title="No data")
     fig = go.Figure(go.Pie(
         labels=d.short, values=d.factNumeric / 1e9,
-        textinfo="label+percent", textfont=dict(size=11),
-        marker=dict(colors=[KBC_GREEN, ZANDERS_BLUE, ACCENT_TEAL,
-                            ZANDERS_LIGHT, ACCENT_ORANGE, "#8ecae6", "#219ebc"]),
-        hole=0.35,
+        textinfo="label+percent", textfont=dict(size=11, color="white"),
+        marker=dict(
+            colors=[KBC_GREEN, ZANDERS_LIGHT, ACCENT_TEAL,
+                    ZANDERS_BLUE, ACCENT_ORANGE, ACCENT_PURPLE, "#26A69A"],
+            line=dict(color="rgba(0,0,0,0.3)", width=2),
+        ),
+        hole=0.4,
+        hovertemplate="<b>%{label}</b><br>€%{value:,.2f}bn (%{percent})<extra></extra>",
     ))
     fig.update_layout(
-        title=dict(text="Deposit Composition – Unweighted (Period T)", font=dict(size=14)),
+        title=dict(text="Deposit Composition – Unweighted (Period T)",
+                   font=dict(size=15, color="#ffffff")),
         showlegend=True,
         legend=dict(orientation="h", yanchor="top", y=-0.05, xanchor="center", x=0.5,
-                    font=dict(size=10)),
+                    font=dict(size=10, color="#B0BEC5")),
         height=420, margin=dict(l=10, r=10, t=50, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
     )
     return fig
 
@@ -533,13 +697,16 @@ def fig_deposit_composition() -> go.Figure:
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown(
     f"""
-    <div style="background: linear-gradient(135deg, {ZANDERS_BLUE}, {ZANDERS_LIGHT});
-                border-radius: 0 0 8px 8px; padding: 1.2rem 1.5rem; margin-bottom: 1.5rem;">
-        <h2 style="color: white; margin: 0; font-weight: 700;">
-            KBC Group – Pillar 3 Disclosure Dashboard
+    <div style="background: linear-gradient(135deg, {ZANDERS_BLUE} 0%, {ZANDERS_LIGHT} 60%, {KBC_GREEN} 100%);
+                border-radius: 0 0 14px 14px; padding: 1.8rem 2rem; margin: -1rem -1rem 1.5rem -1rem;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.4);">
+        <h2 style="color: white; margin: 0; font-weight: 700; font-size: 1.6rem;
+                   letter-spacing: -0.02em; font-family: 'Inter', sans-serif;">
+            🏦 KBC Group – Pillar 3 Disclosure Dashboard
         </h2>
-        <p style="color: rgba(255,255,255,0.75); margin: 0; font-size: 0.85rem;">
-            EBA Pillar 3 Data Hub (P3DH) – Mapped &amp; Visualised
+        <p style="color: rgba(255,255,255,0.7); margin: 0.3rem 0 0 0; font-size: 0.85rem;
+                  font-weight: 400; letter-spacing: 0.02em;">
+            EBA Pillar 3 Data Hub (P3DH) · Mapped &amp; Visualised by Zanders
         </p>
     </div>
     """,
@@ -549,9 +716,13 @@ st.markdown(
 # ══════════════════════════════════════════════════════════════════════════════
 # TABS
 # ══════════════════════════════════════════════════════════════════════════════
-tab_overview, tab_nmd, tab_explorer = st.tabs(["📊 Overview", "🏦 NMD & Deposits", "🔍 Data Explorer"])
+tab_overview, tab_nmd, tab_explorer = st.tabs([
+    "📊  Overview",
+    "🏦  NMD & Deposits",
+    "🔍  Data Explorer",
+])
 
-# ── TAB 1: Overview ───────────────────────────────────────────────────────────
+# ── TAB 1: Overview ─────────────────────────────────────────────────────────
 with tab_overview:
     # KPI row
     c1, c2, c3, c4, c5, c6 = st.columns(6)
@@ -562,6 +733,7 @@ with tab_overview:
     c5.metric("Leverage", f"{LEV_PCT:.2f}%")
     c6.metric("LCR / NSFR", f"{LCR_PCT:.0f}% / {NSFR_PCT:.0f}%")
 
+    st.markdown("")
     st.divider()
 
     # Capital Adequacy
@@ -685,9 +857,15 @@ with tab_explorer:
         st.dataframe(display, use_container_width=True, hide_index=True, height=600)
 
 # ── Footer ────────────────────────────────────────────────────────────────────
+st.markdown("")
 st.divider()
-st.caption(
-    "Source: EBA Pillar 3 Data Hub – KBC Group  ·  "
-    "Mapping: EBA Annotated Table Layouts v4.1  ·  "
-    "Dashboard: Zanders"
+st.markdown(
+    f"""
+    <div style="text-align: center; padding: 0.5rem 0; opacity: 0.5; font-size: 0.78rem;">
+        Source: EBA Pillar 3 Data Hub – KBC Group &nbsp;·&nbsp;
+        Mapping: EBA Annotated Table Layouts v4.1 &nbsp;·&nbsp;
+        Dashboard: <span style="color: {ZANDERS_LIGHT}; font-weight: 600;">Zanders</span>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
