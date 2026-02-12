@@ -705,8 +705,8 @@ def fig_nmd_trend(weighted: bool = False) -> go.Figure:
         if p in totals.index:
             fig.add_annotation(
                 x=p, y=totals[p], text=f"€{totals[p]:,.1f}bn",
-                showarrow=False, font=dict(size=11, color=ZANDERS_BLUE),
-                yshift=12,
+                showarrow=False, font=dict(size=11, color="#B0BEC5"),
+                yshift=14,
             )
 
     lbl = "Weighted" if weighted else "Unweighted"
@@ -797,30 +797,52 @@ with tab_overview:
 
     # Capital Adequacy
     st.subheader("Capital Adequacy")
-    st.caption("EU KM1 – Key Metrics")
+    st.caption(
+        "EU KM1 – Key Metrics  ·  "
+        "Left: absolute own-funds amounts (CET1 ⊂ Tier 1 ⊂ Total Capital).  "
+        "Right: regulatory ratio = own funds ÷ RWA; dashed lines show minimum requirements."
+    )
     left, right = st.columns([5, 7])
     left.plotly_chart(fig_capital_stack(), use_container_width=True)
     right.plotly_chart(fig_capital_ratios(), use_container_width=True)
 
     # RWA
     st.subheader("Risk-Weighted Exposure Amounts")
-    st.caption("EU OV1 – Parent risk types shown separately from 'of which' sub-breakdowns to avoid double-counting")
+    st.caption(
+        "EU OV1 – Left chart shows the **additive** risk categories that sum to Total TREA (dashed line). "
+        "Right chart shows 'of which' sub-breakdowns (hatched bars) — these are **included in** their parent, not additional. "
+        "Read them as: 'Of the €104.6bn Credit Risk, €49.2bn comes from A-IRB, €34.9bn from Standardised, etc.'"
+    )
     left, right = st.columns(2)
     left.plotly_chart(fig_rwa_breakdown(), use_container_width=True)
     right.plotly_chart(fig_rwa_of_which(), use_container_width=True)
 
     # RWA flows
     st.subheader("RWEA Flow Analysis")
+    st.caption(
+        "Waterfall charts show how RWA moved from the previous reporting period to the current one. "
+        "Green bars = increases, red bars = decreases. The first bar is the opening balance, the last is the closing balance."
+    )
     left, right = st.columns(2)
     left.plotly_chart(fig_cr8_waterfall(), use_container_width=True)
     right.plotly_chart(fig_mr2_total(), use_container_width=True)
 
     # IRRBB
     st.subheader("Interest Rate Risk in the Banking Book")
+    st.caption(
+        "EU IRRBB1 – Impact of prescribed interest rate shock scenarios on Economic Value of Equity (EVE) and Net Interest Income (NII). "
+        "Each bar shows how much KBC's EVE or NII would change under that specific scenario (e.g. parallel +200bp, short rates up). "
+        "Negative values = the bank loses value/income under that scenario."
+    )
     st.plotly_chart(fig_irrbb(), use_container_width=True)
 
     # Liquidity
     st.subheader("Liquidity Overview")
+    st.caption(
+        "LCR (Liquidity Coverage Ratio): high-quality liquid assets ÷ net 30-day stress outflows — must exceed 100%.  ·  "
+        "NSFR (Net Stable Funding Ratio): available stable funding ÷ required stable funding — must exceed 100%.  ·  "
+        "Leverage Ratio: Tier 1 capital ÷ total exposure — must exceed 3%. Red zone = below minimum."
+    )
     st.plotly_chart(fig_liquidity_gauges(), use_container_width=True)
 
 # ── TAB 2: NMD & Deposits ────────────────────────────────────────────────────
@@ -871,7 +893,11 @@ with tab_nmd:
 
     # Charts row 1
     st.subheader("Deposit Breakdown")
-    st.caption("EU LIQ1 (K_73.00.c) – LCR outflow detail")
+    st.caption(
+        "EU LIQ1 (K_73.00.c) – Left: compare gross deposit volumes (blue) against the regulatory stressed outflow (green) for each category. "
+        "The gap between the two bars shows how much the regulator expects to 'stick'.  ·  "
+        "Right: share of each deposit type in the total unweighted deposit base."
+    )
     left, right = st.columns([7, 5])
     left.plotly_chart(fig_nmd_unweighted_vs_weighted(), use_container_width=True)
     right.plotly_chart(fig_deposit_composition(), use_container_width=True)
@@ -909,11 +935,20 @@ with tab_nmd:
 
     # Charts row 2: outflow rates
     st.subheader("Outflow Rates")
+    st.caption(
+        "Outflow rate = Weighted ÷ Unweighted. A lower rate means the deposit type is considered more 'sticky'. "
+        "Green = low runoff risk (<10%), orange = moderate (10–30%), red = high (>30%). "
+        "Stable NMD at ~5% is extremely favourable; unsecured debt at 100% must be fully covered."
+    )
     st.plotly_chart(fig_nmd_outflow_rates(), use_container_width=True)
 
     # Charts row 3: stacked bar trends (UW and W side by side)
     st.subheader("NMD Trends across Periods")
-    st.caption("Stable + Less Stable NMD stacked per quarter (Retail & SME total shown above bars)")
+    st.caption(
+        "Stacked bars show the Stable (green) and Less Stable (orange) NMD split over time. "
+        "Total shown above each bar. Left = gross volumes; Right = net outflow after applying run-off rates. "
+        "A growing green share means more deposits are classified as stable — good for both LCR and IRRBB."
+    )
     left, right = st.columns(2)
     left.plotly_chart(fig_nmd_trend(weighted=False), use_container_width=True)
     right.plotly_chart(fig_nmd_trend(weighted=True), use_container_width=True)
