@@ -226,19 +226,24 @@ name = "kbc-p3dh"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "openpyxl" },
     { name = "pandas" },
     { name = "plotly" },
     { name = "streamlit" },
 ]
 
+[package.optional-dependencies]
+ingest = [
+    { name = "openpyxl" },
+]
+
 [package.metadata]
 requires-dist = [
-    { name = "openpyxl", specifier = ">=3.1.5" },
+    { name = "openpyxl", marker = "extra == 'ingest'", specifier = ">=3.1.5" },
     { name = "pandas", specifier = ">=2.0,<3" },
     { name = "plotly", specifier = ">=6.5.2" },
     { name = "streamlit", specifier = ">=1.40" },
 ]
+provides-extras = ["ingest"]
 
 [[package]]
 name = "markupsafe"

@@ -1,47 +1,54 @@
 """
-Load KBC P3DH CSV data files and merge with the EBA datapoint mapping.
+Load KBC P3DH data from SQLite.
+
+Run ``uv run python ingest.py`` once to build the database from the raw
+CSV/Excel source files.  After that the dashboard reads exclusively from
+kbc_p3dh.db – no openpyxl or CSV parsing at runtime.
 """
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pandas as pd
 
-from kbc_p3dh.mapping import DATA_DIR, build_mapping
+# ── Paths ──────────────────────────────────────────────────────────────────────
+_ROOT = Path(__file__).resolve().parents[2]
+DB_PATH = _ROOT / "kbc_p3dh.db"
+DATA_DIR = _ROOT / "P3DH downloads"
 
 
+# ── Raw CSV reader (used by ingest.py only) ────────────────────────────────────
 def load_raw_data(data_dir: Path = DATA_DIR) -> pd.DataFrame:
-    """Read all k_*.csv files → single DataFrame with columns [datapoint, factValue, file]."""
+    """Read all k_*.csv files → DataFrame [datapoint, factValue, file]."""
     frames: list[pd.DataFrame] = []
     for csv_path in sorted(data_dir.glob("k_*.csv")):
         df = pd.read_csv(csv_path)
-        df["file"] = csv_path.stem  # e.g. "k_60.00.a"
+        df["file"] = csv_path.stem
         frames.append(df)
     if not frames:
         raise FileNotFoundError(f"No k_*.csv files found in {data_dir}")
     return pd.concat(frames, ignore_index=True)
 
 
+# ── Dashboard entry point ──────────────────────────────────────────────────────
 def load_mapped_data() -> pd.DataFrame:
-    """Load CSV data and enrich with mapping metadata.
+    """Load the fully joined dataset from SQLite.
 
     Returns DataFrame with columns:
         datapoint, factValue, file, template, template_title,
-        row_label, row_code, col_label, col_code, unit
+        row_label, row_code, col_label, col_code, unit, factNumeric, group
     """
-    raw = load_raw_data()
-    mapping = build_mapping()
-
-    # Filter mapping to only templates that have data files
-    file_templates = set(raw["file"].str.upper().str.replace("K_", "K_"))
-    # Merge on datapoint; keep all raw rows (left join)
-    merged = raw.merge(mapping, on="datapoint", how="left")
-
-    # Coerce factValue to numeric where possible (keep text as-is for qualitative)
-    merged["factNumeric"] = pd.to_numeric(merged["factValue"], errors="coerce")
-
-    return merged
+    if not DB_PATH.exists() or DB_PATH.stat().st_size == 0:
+        raise FileNotFoundError(
+            f"Database not found at {DB_PATH}.\n"
+            "Run  uv run python ingest.py  to build it first."
+        )
+    con = sqlite3.connect(str(DB_PATH))
+    df = pd.read_sql("SELECT * FROM mapped_data", con)
+    con.close()
+    return df
 
 
 # ── Convenience aggregations ──────────────────────────────────────────────────
