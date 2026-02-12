@@ -7,7 +7,6 @@ Run with:  uv run streamlit run dashboard.py
 from __future__ import annotations
 
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -830,25 +829,43 @@ with tab_nmd:
     stable_uw = NMD_UW[NMD_UW.rc.str.contains("Stable deposits", na=False)]
     less_stable_uw = NMD_UW[NMD_UW.rc.str.contains("Less stable", na=False)]
     retail_uw = NMD_UW[NMD_UW.rc.str.contains("Retail", na=False)]
+    wholesale_uw = NMD_UW[NMD_UW.rc.str.contains("Unsecured wholesale funding", na=False)]
     stable_w = NMD_W[NMD_W.rc.str.contains("Stable deposits", na=False)]
     less_stable_w = NMD_W[NMD_W.rc.str.contains("Less stable", na=False)]
 
     s_val = stable_uw.factNumeric.values[0] / 1e9 if len(stable_uw) else 0
     ls_val = less_stable_uw.factNumeric.values[0] / 1e9 if len(less_stable_uw) else 0
     ret_val = retail_uw.factNumeric.values[0] / 1e9 if len(retail_uw) else 0
+    ws_val = wholesale_uw.factNumeric.values[0] / 1e9 if len(wholesale_uw) else 0
+    total_deposits = ret_val + ws_val
+    other_retail = ret_val - s_val - ls_val  # retail deposits not classified as Stable/Less Stable
     s_w = stable_w.factNumeric.values[0] / 1e9 if len(stable_w) else 0
     ls_w = less_stable_w.factNumeric.values[0] / 1e9 if len(less_stable_w) else 0
 
     s_rate = (s_w / s_val * 100) if s_val else 0
     ls_rate = (ls_w / ls_val * 100) if ls_val else 0
 
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-    c1.metric("Retail & SME (UW)", f"€{ret_val:,.1f}bn")
-    c2.metric("Stable NMD (UW)", f"€{s_val:,.1f}bn")
-    c3.metric("Less Stable (UW)", f"€{ls_val:,.1f}bn")
+    # Row 1: deposit totals
+    st.caption("All values are 12-month LCR rolling averages (unweighted), not point-in-time balances")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Deposits (UW)", f"€{total_deposits:,.1f}bn",
+              help="Retail & SME + Unsecured Wholesale. LCR 12-month avg ≈ annual report YE balance.")
+    c2.metric("Retail & SME", f"€{ret_val:,.1f}bn",
+              help="Row 2 in EU LIQ1 — includes Stable, Less Stable, and other retail deposits.")
+    c3.metric("Unsecured Wholesale", f"€{ws_val:,.1f}bn",
+              help="Row 5 in EU LIQ1 — operational + non-operational + unsecured debt.")
+    c4.metric("Retail / Wholesale Split", f"{ret_val/total_deposits*100:.0f}% / {ws_val/total_deposits*100:.0f}%")
+
+    # Row 2: NMD detail
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Stable NMD", f"€{s_val:,.1f}bn",
+              help="Portion of retail deposits with low run-off risk; can be modelled with longer behavioral maturity.")
+    c2.metric("Less Stable NMD", f"€{ls_val:,.1f}bn",
+              help="Retail deposits with higher run-off risk (e.g. high-value, internet-only).")
+    c3.metric("Other Retail", f"€{other_retail:,.1f}bn",
+              help=f"Retail & SME (€{ret_val:,.1f}bn) minus Stable (€{s_val:,.1f}bn) minus Less Stable (€{ls_val:,.1f}bn). Likely term deposits or other categories.")
     c4.metric("Stable Outflow Rate", f"{s_rate:.1f}%")
-    c5.metric("Less Stable Rate", f"{ls_rate:.1f}%")
-    c6.metric("NMD Total (UW)", f"€{s_val + ls_val:,.1f}bn")
+    c5.metric("Less Stable Outflow Rate", f"{ls_rate:.1f}%")
 
     st.divider()
 
