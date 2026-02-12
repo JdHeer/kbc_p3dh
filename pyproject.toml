@@ -11,6 +11,9 @@ dependencies = [
     "streamlit>=1.40",
 ]
 
+[project.scripts]
+dashboard = "kbc_p3dh._run:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
