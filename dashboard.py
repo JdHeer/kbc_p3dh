@@ -313,6 +313,48 @@ _nmd_ts["short"] = _nmd_ts.rc.map(_SHORT)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# 7. ANNUAL REPORT DEPOSIT INSIGHTS (IFRS TABLES)
+# Source: KBC Annual Report 2024 (Note 2.3 / Note 4.1 / Liquidity section)
+# ══════════════════════════════════════════════════════════════════════════════
+_AR_TOTAL_DEPOSITS_2024_MN = 271_087  # Deposits from customers + debt securities (excl. repos)
+_AR_TOTAL_DEPOSITS_2023_MN = 259_491
+_AR_CUSTOMER_DEPOSITS_2024_MN = 228_747
+_AR_CUSTOMER_DEPOSITS_2023_MN = 216_501
+_AR_REPORT_URL = "https://www.kbc.com/content/dam/kbccom/doc/investor-relations/Results/jvs-2024/jvs-2024-grp-en.pdf"
+
+_AR_GEO = pd.DataFrame(
+    [
+        {"label": "Belgium BU", "group": "Business Unit", "parent": "Total", "v2024": 164_483, "v2023": 154_238},
+        {"label": "Czech BU", "group": "Business Unit", "parent": "Total", "v2024": 52_709, "v2023": 52_642},
+        {"label": "International Markets BU", "group": "Business Unit", "parent": "Total", "v2024": 32_832, "v2023": 31_687},
+        {"label": "Hungary", "group": "IM Country", "parent": "International Markets BU", "v2024": 9_607, "v2023": 9_610},
+        {"label": "Slovakia", "group": "IM Country", "parent": "International Markets BU", "v2024": 9_360, "v2023": 8_836},
+        {"label": "Bulgaria", "group": "IM Country", "parent": "International Markets BU", "v2024": 13_865, "v2023": 13_241},
+    ]
+)
+_AR_GEO_TOTAL_EX_GC_2024_MN = int(_AR_GEO[_AR_GEO["group"] == "Business Unit"]["v2024"].sum())
+_AR_GEO_TOTAL_EX_GC_2023_MN = int(_AR_GEO[_AR_GEO["group"] == "Business Unit"]["v2023"].sum())
+_AR_GEO["yoy_pct"] = (_AR_GEO["v2024"] / _AR_GEO["v2023"] - 1) * 100
+_AR_GEO["share_pct"] = _AR_GEO["v2024"] / _AR_GEO_TOTAL_EX_GC_2024_MN * 100
+
+_AR_PRODUCTS = pd.DataFrame(
+    [
+        {"label": "Demand deposits", "v2024": 110_090, "v2023": 107_568},
+        {"label": "Savings accounts", "v2024": 74_440, "v2023": 70_810},
+        {"label": "Time deposits", "v2024": 42_966, "v2023": 38_044},
+        {"label": "Debt securities\n(incl. savings certificates)", "v2024": 43_590, "v2023": 43_068},
+    ]
+)
+_AR_PRODUCTS["yoy_pct"] = (_AR_PRODUCTS["v2024"] / _AR_PRODUCTS["v2023"] - 1) * 100
+_AR_PRODUCTS["share_pct"] = _AR_PRODUCTS["v2024"] / _AR_TOTAL_DEPOSITS_2024_MN * 100
+
+_AR_DGS_COVERAGE_PCT = 56.0
+_AR_STABLE_RETAIL_SME_PCT = 86.0
+_AR_CUSTOMER_FUNDING_ON_DEMAND_BN = 154.0
+_AR_CUSTOMER_FUNDING_TOTAL_BN = 229.0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # CHART BUILDERS
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -555,15 +597,18 @@ def fig_irrbb() -> go.Figure:
             textposition="outside", textfont=dict(size=10, color="#E0E0E0"),
             hovertemplate="<b>%{x}</b><br>ΔNII: %{y:+.2f}% of Tier 1<extra></extra>",
         ))
-    # SOT threshold lines
-    fig.add_hline(y=-15, line_dash="dash", line_color=ACCENT_RED, line_width=2,
-                  annotation=dict(text="EVE SOT (−15% T1)", font=dict(size=10, color=ACCENT_RED),
-                                  bgcolor="rgba(239,83,80,0.15)", borderpad=3,
-                                  xref="paper", x=1, xanchor="right"))
-    fig.add_hline(y=-5, line_dash="dot", line_color=ACCENT_ORANGE, line_width=1.5,
-                  annotation=dict(text="NII SOT (−5% T1)", font=dict(size=10, color=ACCENT_ORANGE),
-                                  bgcolor="rgba(255,167,38,0.15)", borderpad=3,
-                                  xref="paper", x=0, xanchor="left"))
+    # SOT threshold lines (manual shape+annotation to avoid Plotly xref bug)
+    for y_val, dash, color, label, x_pos, anchor, bg in [
+        (-15, "dash", ACCENT_RED, "EVE SOT (−15% T1)", 1, "right", "rgba(239,83,80,0.15)"),
+        (-5, "dot", ACCENT_ORANGE, "NII SOT (−5% T1)", 0, "left", "rgba(255,167,38,0.15)"),
+    ]:
+        fig.add_shape(type="line", xref="paper", yref="y",
+                      x0=0, x1=1, y0=y_val, y1=y_val,
+                      line=dict(color=color, width=2 if dash == "dash" else 1.5, dash=dash))
+        fig.add_annotation(text=label, xref="paper", yref="y",
+                           x=x_pos, y=y_val, xanchor=anchor, yanchor="bottom",
+                           font=dict(size=10, color=color),
+                           bgcolor=bg, borderpad=3, showarrow=False)
     # Determine y-axis range to show threshold lines
     all_vals = []
     if not IRR_EVE.empty and T1_ABS > 0:
@@ -856,6 +901,187 @@ def fig_nmd_trend(weighted: bool = False) -> go.Figure:
     return fig
 
 
+# ── Annual report deposit insight charts ──────────────────────────────────────
+
+def fig_ar_geo_treemap() -> go.Figure:
+    d = _AR_GEO.copy()
+    total_yoy = (_AR_GEO_TOTAL_EX_GC_2024_MN / _AR_GEO_TOTAL_EX_GC_2023_MN - 1) * 100
+
+    ids = ["Total"] + d["label"].tolist()
+    labels = [f"Total (excl. Group Centre)<br>€{_AR_GEO_TOTAL_EX_GC_2024_MN/1e3:,.1f}bn"] + [
+        f"{r.label}<br>€{r.v2024/1e3:,.1f}bn" for _, r in d.iterrows()
+    ]
+    parents = [""] + d["parent"].tolist()
+    values = [_AR_GEO_TOTAL_EX_GC_2024_MN] + d["v2024"].tolist()
+    shares = [100.0] + d["share_pct"].tolist()
+    yoy = [total_yoy] + d["yoy_pct"].tolist()
+
+    color_map = {"Business Unit": ZANDERS_LIGHT, "IM Country": KBC_GREEN}
+    colors = ["rgba(0,0,0,0)"] + [color_map.get(g, SUBTLE_GRAY) for g in d["group"]]
+
+    fig = go.Figure(go.Treemap(
+        ids=ids,
+        labels=labels,
+        parents=parents,
+        values=values,
+        customdata=list(zip(shares, yoy)),
+        branchvalues="total",
+        marker=dict(colors=colors, line=dict(color="rgba(0,0,0,0.35)", width=1)),
+        textfont=dict(size=11, color="white"),
+        hovertemplate=(
+            "<b>%{label}</b><br>"
+            "Value: €%{value:,.0f}m<br>"
+            "Share of total: %{customdata[0]:.1f}%<br>"
+            "YoY: %{customdata[1]:+.1f}%<extra></extra>"
+        ),
+    ))
+    fig.update_layout(
+        title=dict(text="Deposit Geography (IFRS, 2024, excl. Group Centre)", font=dict(size=15, color="#ffffff")),
+        height=470,
+        margin=dict(l=10, r=10, t=55, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+    )
+    return fig
+
+
+def fig_ar_geo_growth() -> go.Figure:
+    d = _AR_GEO.copy()
+    d["display"] = d.apply(
+        lambda r: f"{r['label']} (IM)" if r["group"] == "IM Country" else r["label"], axis=1
+    )
+    d = d.sort_values("yoy_pct")
+    fig = go.Figure(go.Bar(
+        x=d["yoy_pct"],
+        y=d["display"],
+        orientation="h",
+        marker=dict(
+            color=[KBC_GREEN if v >= 0 else ACCENT_RED for v in d["yoy_pct"]],
+            cornerradius=4,
+        ),
+        text=d["yoy_pct"].apply(lambda v: f"{v:+.1f}%"),
+        textposition="outside",
+        textfont=dict(size=11, color="#E0E0E0"),
+        hovertemplate="<b>%{y}</b><br>YoY growth: %{x:+.2f}%<extra></extra>",
+    ))
+    fig.update_layout(
+        title=dict(text="YoY Growth by Geography (2024 vs 2023)", font=dict(size=15, color="#ffffff")),
+        xaxis=dict(title="Growth (%)", gridcolor="rgba(255,255,255,0.06)"),
+        yaxis_title="",
+        showlegend=False,
+        height=470,
+        **CHART_LAYOUT,
+    )
+    return fig
+
+
+def fig_ar_product_mix_donut() -> go.Figure:
+    d = _AR_PRODUCTS.copy()
+    color_map = {
+        "Demand deposits": ZANDERS_LIGHT,
+        "Savings accounts": KBC_GREEN,
+        "Time deposits": ACCENT_ORANGE,
+        "Debt securities\n(incl. savings certificates)": ZANDERS_BLUE,
+    }
+    fig = go.Figure(go.Pie(
+        labels=d["label"],
+        values=d["v2024"],
+        hole=0.48,
+        marker=dict(colors=[color_map.get(lbl, SUBTLE_GRAY) for lbl in d["label"]],
+                    line=dict(color="rgba(0,0,0,0.35)", width=1)),
+        customdata=d["share_pct"],
+        texttemplate="%{percent}",
+        textfont=dict(size=12, color="white"),
+        hovertemplate="<b>%{label}</b><br>€%{value:,.0f}m<br>Share: %{customdata:.1f}%<extra></extra>",
+    ))
+    fig.update_layout(
+        title=dict(text="Deposit Product Mix (2024)", font=dict(size=15, color="#ffffff")),
+        height=430,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.12, xanchor="center", x=0.5, font=dict(size=10)),
+        margin=dict(l=10, r=10, t=55, b=35),
+        paper_bgcolor="rgba(0,0,0,0)",
+    )
+    return fig
+
+
+def fig_ar_product_yoy() -> go.Figure:
+    d = _AR_PRODUCTS.copy()
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=d["label"],
+        y=d["v2023"] / 1e3,
+        name="2023",
+        marker=dict(color=SUBTLE_GRAY, cornerradius=4),
+        text=d["v2023"].apply(lambda v: f"€{v/1e3:,.1f}bn"),
+        textposition="outside",
+        textfont=dict(size=10, color="#B0BEC5"),
+        hovertemplate="<b>%{x}</b><br>2023: €%{y:,.2f}bn<extra></extra>",
+    ))
+    fig.add_trace(go.Bar(
+        x=d["label"],
+        y=d["v2024"] / 1e3,
+        name="2024",
+        marker=dict(color=ZANDERS_LIGHT, cornerradius=4),
+        text=d["yoy_pct"].apply(lambda v: f"{v:+.1f}% YoY"),
+        textposition="outside",
+        textfont=dict(size=10, color="#E0E0E0"),
+        hovertemplate="<b>%{x}</b><br>2024: €%{y:,.2f}bn<extra></extra>",
+    ))
+    fig.update_layout(
+        title=dict(text="Product Volumes: 2024 vs 2023", font=dict(size=15, color="#ffffff")),
+        yaxis=dict(title="EUR billions", gridcolor="rgba(255,255,255,0.06)"),
+        xaxis=dict(gridcolor="rgba(255,255,255,0.06)"),
+        barmode="group",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=11)),
+        height=430,
+        **CHART_LAYOUT,
+    )
+    return fig
+
+
+def fig_ar_stability_profile() -> go.Figure:
+    on_demand_pct = _AR_CUSTOMER_FUNDING_ON_DEMAND_BN / _AR_CUSTOMER_FUNDING_TOTAL_BN * 100
+    d = pd.DataFrame(
+        [
+            {"metric": "Deposit guarantee coverage", "strong_pct": _AR_DGS_COVERAGE_PCT},
+            {"metric": "Stable retail/SME share", "strong_pct": _AR_STABLE_RETAIL_SME_PCT},
+            {"metric": "On-demand customer funding", "strong_pct": on_demand_pct},
+        ]
+    )
+    d["rest_pct"] = 100 - d["strong_pct"]
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=d["strong_pct"],
+        y=d["metric"],
+        orientation="h",
+        name="Primary share",
+        marker=dict(color=KBC_GREEN, cornerradius=4),
+        text=d["strong_pct"].apply(lambda v: f"{v:.1f}%"),
+        textposition="inside",
+        textfont=dict(size=11, color="white"),
+        hovertemplate="<b>%{y}</b><br>%{x:.1f}%<extra></extra>",
+    ))
+    fig.add_trace(go.Bar(
+        x=d["rest_pct"],
+        y=d["metric"],
+        orientation="h",
+        name="Remainder",
+        marker=dict(color="rgba(144,164,174,0.35)", cornerradius=4),
+        hovertemplate="<b>%{y}</b><br>Remainder: %{x:.1f}%<extra></extra>",
+    ))
+    fig.update_layout(
+        title=dict(text="Deposit Stability Profile (2024)", font=dict(size=15, color="#ffffff")),
+        xaxis=dict(title="Share of customer deposits / funding (%)", range=[0, 100],
+                   gridcolor="rgba(255,255,255,0.06)"),
+        yaxis_title="",
+        barmode="stack",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=11)),
+        height=360,
+        **CHART_LAYOUT,
+    )
+    return fig
+
+
 # fig_deposit_composition removed – replaced by fig_deposit_sunburst above
 
 
@@ -879,13 +1105,17 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+st.caption(
+    f"References: [KBC Annual Report 2024 (PDF)]({_AR_REPORT_URL})"
+)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TABS
 # ══════════════════════════════════════════════════════════════════════════════
-tab_overview, tab_nmd, tab_explorer = st.tabs([
+tab_overview, tab_nmd, tab_deposit_insights, tab_explorer = st.tabs([
     "📊  Overview",
     "🏦  NMD & Deposits",
+    "🧭  Deposit Insights",
     "🔍  Data Explorer",
 ])
 
@@ -1074,7 +1304,138 @@ with tab_nmd:
             use_container_width=True, hide_index=True, height=500,
         )
 
-# ── TAB 3: Data Explorer ─────────────────────────────────────────────────────
+# ── TAB 3: Deposit Insights ──────────────────────────────────────────────────
+with tab_deposit_insights:
+    st.subheader("Annual Report Deposit Insights (IFRS)")
+    st.caption(
+        "Source: KBC Annual Report 2024  ·  Note 2.3 (Balance-sheet info by segment), "
+        "Note 4.1 (financial liabilities), and Liquidity section.  "
+        "Values are year-end IFRS balances (not LCR rolling averages)."
+    )
+    st.markdown(
+        f"Verify source document: [KBC Annual Report 2024 (PDF)]({_AR_REPORT_URL})"
+    )
+
+    with st.expander("🔎 Source references (click to verify)", expanded=False):
+        st.markdown(
+            f"- Geographic split and segment deposit products: [Note 2.3 (PDF p.280, printed p.278)]({_AR_REPORT_URL}#page=280) "
+            "(Group Centre excluded in this dashboard view, because it mainly reflects debt securities)\n"
+            f"- Deposit liabilities and customer deposit subtotal: [Note 4.1 (PDF p.298, printed p.296)]({_AR_REPORT_URL}#page=298)\n"
+            f"- Funding mix and customer-funding maturity buckets: [Liquidity section (PDF p.87, printed p.85)]({_AR_REPORT_URL}#page=87)\n"
+            f"- Deposit Guarantee coverage (56%) and stable retail/SME share (86%): [PDF p.306, printed p.304]({_AR_REPORT_URL}#page=306)"
+        )
+
+    geo_scope_delta_bn = (_AR_GEO_TOTAL_EX_GC_2024_MN - _AR_GEO_TOTAL_EX_GC_2023_MN) / 1e3
+    cust_delta_bn = (_AR_CUSTOMER_DEPOSITS_2024_MN - _AR_CUSTOMER_DEPOSITS_2023_MN) / 1e3
+    savings_cert_2024_bn = 1_250 / 1e3
+    savings_cert_delta_bn = (1_250 - 79) / 1e3
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric(
+        "Geo Scope (excl. Group Centre)",
+        f"€{_AR_GEO_TOTAL_EX_GC_2024_MN/1e3:,.1f}bn",
+        delta=f"+€{geo_scope_delta_bn:,.1f}bn vs 2023",
+        help="Belgium BU + Czech BU + International Markets BU only.",
+    )
+    c2.metric(
+        "Customer Deposits",
+        f"€{_AR_CUSTOMER_DEPOSITS_2024_MN/1e3:,.1f}bn",
+        delta=f"+€{cust_delta_bn:,.1f}bn vs 2023",
+    )
+    c3.metric(
+        "Deposit Product Core",
+        "Demand / Savings / Time",
+        help="Demand: €110.1bn, Savings: €74.4bn, Time: €43.0bn (2024).",
+    )
+    c4.metric(
+        "Savings Certificates",
+        f"€{savings_cert_2024_bn:,.2f}bn",
+        delta=f"+€{savings_cert_delta_bn:,.2f}bn vs 2023",
+    )
+
+    st.divider()
+
+    st.subheader("1) Geographic Deposit Split")
+    st.caption(
+        "2024 IFRS deposit balances across business units with drill-down into "
+        "International Markets (Hungary, Slovakia, Bulgaria). "
+        "Group Centre is excluded because it is mainly debt securities."
+    )
+    st.caption(
+        f"Reference: [Annual Report Note 2.3 – Balance-sheet info by segment (PDF p.280, printed p.278)]({_AR_REPORT_URL}#page=280)"
+    )
+    left, right = st.columns([7, 5])
+    left.plotly_chart(fig_ar_geo_treemap(), use_container_width=True)
+    right.plotly_chart(fig_ar_geo_growth(), use_container_width=True)
+
+    st.subheader("2) Deposit Product Mix")
+    st.caption(
+        "Composition of deposits by product in 2024 and comparison to 2023 "
+        "(demand deposits, savings accounts, time deposits, and debt securities)."
+    )
+    st.caption(
+        f"References: [Note 2.3 (PDF p.280, printed p.278)]({_AR_REPORT_URL}#page=280)  ·  "
+        f"[Note 4.1 – liabilities breakdown (PDF p.298, printed p.296)]({_AR_REPORT_URL}#page=298)"
+    )
+    left, right = st.columns([5, 7])
+    left.plotly_chart(fig_ar_product_mix_donut(), use_container_width=True)
+    right.plotly_chart(fig_ar_product_yoy(), use_container_width=True)
+
+    st.subheader("3) Deposit Stability Indicators")
+    st.caption(
+        "Annual report indicators linked to stability of the funding base."
+    )
+    st.caption(
+        f"References: [Liquidity funding mix table (PDF p.87, printed p.85)]({_AR_REPORT_URL}#page=87)  ·  "
+        f"[Deposit Guarantee coverage + stable retail/SME share (PDF p.306, printed p.304)]({_AR_REPORT_URL}#page=306)"
+    )
+    on_demand_pct = _AR_CUSTOMER_FUNDING_ON_DEMAND_BN / _AR_CUSTOMER_FUNDING_TOTAL_BN * 100
+    c1, c2, c3 = st.columns(3)
+    c1.metric(
+        "Deposit Guarantee Coverage",
+        f"{_AR_DGS_COVERAGE_PCT:.1f}%",
+        help=f"Approx. €{_AR_CUSTOMER_DEPOSITS_2024_MN*_AR_DGS_COVERAGE_PCT/100/1e3:,.1f}bn of customer deposits.",
+    )
+    c2.metric(
+        "Stable Retail/SME Share",
+        f"{_AR_STABLE_RETAIL_SME_PCT:.1f}%",
+        help=f"Approx. €{_AR_CUSTOMER_DEPOSITS_2024_MN*_AR_STABLE_RETAIL_SME_PCT/100/1e3:,.1f}bn of customer deposits.",
+    )
+    c3.metric(
+        "On-demand Customer Funding",
+        f"{on_demand_pct:.1f}%",
+        help="€154bn on-demand out of €229bn customer funding in liquidity maturity table (2024).",
+    )
+    st.plotly_chart(fig_ar_stability_profile(), use_container_width=True)
+
+    with st.expander("📋 Annual Report Deposit Data (2024 vs 2023)", expanded=False):
+        geo = _AR_GEO[["label", "group", "v2024", "v2023", "share_pct", "yoy_pct"]].copy()
+        geo.columns = ["Geography", "Type", "2024 (€m)", "2023 (€m)", "Share 2024 (%)", "YoY (%)"]
+        geo["2024 (€bn)"] = geo["2024 (€m)"] / 1e3
+        geo["2023 (€bn)"] = geo["2023 (€m)"] / 1e3
+        geo["Share 2024 (%)"] = geo["Share 2024 (%)"].map(lambda v: f"{v:,.1f}")
+        geo["YoY (%)"] = geo["YoY (%)"].map(lambda v: f"{v:+.1f}")
+
+        prod = _AR_PRODUCTS.copy()
+        prod.columns = ["Product", "2024 (€m)", "2023 (€m)", "YoY (%)", "Share 2024 (%)"]
+        prod["2024 (€bn)"] = prod["2024 (€m)"] / 1e3
+        prod["2023 (€bn)"] = prod["2023 (€m)"] / 1e3
+        prod["YoY (%)"] = prod["YoY (%)"].map(lambda v: f"{v:+.1f}")
+        prod["Share 2024 (%)"] = prod["Share 2024 (%)"].map(lambda v: f"{v:,.1f}")
+
+        left, right = st.columns(2)
+        left.dataframe(
+            geo[["Geography", "Type", "2024 (€bn)", "2023 (€bn)", "Share 2024 (%)", "YoY (%)"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+        right.dataframe(
+            prod[["Product", "2024 (€bn)", "2023 (€bn)", "Share 2024 (%)", "YoY (%)"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+# ── TAB 4: Data Explorer ─────────────────────────────────────────────────────
 with tab_explorer:
     st.subheader("Data Explorer")
     st.caption("Browse all mapped EBA datapoints")
@@ -1103,6 +1464,7 @@ st.markdown(
     f"""
     <div style="text-align: center; padding: 0.5rem 0; opacity: 0.5; font-size: 0.78rem;">
         Source: EBA Pillar 3 Data Hub – KBC Group &nbsp;·&nbsp;
+        Annual report: <a href="{_AR_REPORT_URL}" target="_blank">KBC Annual Report 2024</a> &nbsp;·&nbsp;
         Mapping: EBA Annotated Table Layouts v4.1 &nbsp;·&nbsp;
         Dashboard: <span style="color: {ZANDERS_LIGHT}; font-weight: 600;">Zanders</span>
     </div>
