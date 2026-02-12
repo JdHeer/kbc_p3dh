@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from kbc_p3dh.loader import load_raw_data, DATA_DIR, TEMPLATE_GROUPS, get_template_group
+from kbc_p3dh.loader import DATA_DIR, get_template_group, load_raw_data
 from kbc_p3dh.mapping import build_mapping
 
 DB_DEFAULT = Path(__file__).resolve().parent / "kbc_p3dh.db"

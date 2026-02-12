@@ -197,6 +197,7 @@ NSFR_PCT = _kpi("NSFR ratio") * 100
 CET1_PCT = _kpi("5. Common Equity Tier 1 ratio") * 100
 T1_PCT = _kpi("6. Tier 1 ratio") * 100
 TC_PCT = _kpi("7. Total capital ratio") * 100
+T1_ABS = _kpi("2. Tier 1 capital")  # absolute Tier 1 for SOT denominators
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 2. RWA OVERVIEW (EU OV1, k_60.00.a)
@@ -534,31 +535,52 @@ def fig_mr2_total() -> go.Figure:
 
 
 def fig_irrbb() -> go.Figure:
+    """IRRBB sensitivities as % of Tier 1 capital, with SOT threshold lines."""
     fig = go.Figure()
-    if not IRR_EVE.empty:
+    if not IRR_EVE.empty and T1_ABS > 0:
+        eve_pct = IRR_EVE.factNumeric / T1_ABS * 100
         fig.add_trace(go.Bar(
-            x=IRR_EVE.rc, y=IRR_EVE.factNumeric / 1e6,
-            name="ΔEVE", marker=dict(color=ZANDERS_LIGHT, cornerradius=4),
-            text=IRR_EVE.factNumeric.apply(lambda v: f"€{v/1e6:,.0f}m"),
+            x=IRR_EVE.rc, y=eve_pct,
+            name="ΔEVE / T1", marker=dict(color=ZANDERS_LIGHT, cornerradius=4),
+            text=eve_pct.apply(lambda v: f"{v:+.1f}%"),
             textposition="outside", textfont=dict(size=10, color="#E0E0E0"),
-            hovertemplate="<b>%{x}</b><br>ΔEVE: €%{y:,.0f}m<extra></extra>",
+            hovertemplate="<b>%{x}</b><br>ΔEVE: %{y:+.2f}% of Tier 1<extra></extra>",
         ))
-    if not IRR_NII.empty:
+    if not IRR_NII.empty and T1_ABS > 0:
+        nii_pct = IRR_NII.factNumeric / T1_ABS * 100
         fig.add_trace(go.Bar(
-            x=IRR_NII.rc, y=IRR_NII.factNumeric / 1e6,
-            name="ΔNII", marker=dict(color=KBC_GREEN, cornerradius=4),
-            text=IRR_NII.factNumeric.apply(lambda v: f"€{v/1e6:,.0f}m"),
+            x=IRR_NII.rc, y=nii_pct,
+            name="ΔNII / T1", marker=dict(color=KBC_GREEN, cornerradius=4),
+            text=nii_pct.apply(lambda v: f"{v:+.1f}%"),
             textposition="outside", textfont=dict(size=10, color="#E0E0E0"),
-            hovertemplate="<b>%{x}</b><br>ΔNII: €%{y:,.0f}m<extra></extra>",
+            hovertemplate="<b>%{x}</b><br>ΔNII: %{y:+.2f}% of Tier 1<extra></extra>",
         ))
+    # SOT threshold lines
+    fig.add_hline(y=-15, line_dash="dash", line_color=ACCENT_RED, line_width=2,
+                  annotation=dict(text="EVE SOT (−15% T1)", font=dict(size=10, color=ACCENT_RED),
+                                  bgcolor="rgba(239,83,80,0.15)", borderpad=3,
+                                  xref="paper", x=1, xanchor="right"))
+    fig.add_hline(y=-5, line_dash="dot", line_color=ACCENT_ORANGE, line_width=1.5,
+                  annotation=dict(text="NII SOT (−5% T1)", font=dict(size=10, color=ACCENT_ORANGE),
+                                  bgcolor="rgba(255,167,38,0.15)", borderpad=3,
+                                  xref="paper", x=0, xanchor="left"))
+    # Determine y-axis range to show threshold lines
+    all_vals = []
+    if not IRR_EVE.empty and T1_ABS > 0:
+        all_vals.extend((IRR_EVE.factNumeric / T1_ABS * 100).tolist())
+    if not IRR_NII.empty and T1_ABS > 0:
+        all_vals.extend((IRR_NII.factNumeric / T1_ABS * 100).tolist())
+    y_min = min(min(all_vals, default=-15), -18)
+    y_max = max(max(all_vals, default=5), 8)
     fig.update_layout(
-        title=dict(text="IRRBB Sensitivities – EVE vs NII (EU IRRBB1)", font=dict(size=15, color="#ffffff")),
-        yaxis=dict(title="EUR millions", gridcolor="rgba(255,255,255,0.06)"),
+        title=dict(text="IRRBB – Supervisory Outlier Test (% of Tier 1)", font=dict(size=15, color="#ffffff")),
+        yaxis=dict(title="% of Tier 1 Capital", gridcolor="rgba(255,255,255,0.06)",
+                   range=[y_min * 1.3, y_max * 1.3]),
         xaxis=dict(gridcolor="rgba(255,255,255,0.06)"),
         barmode="group",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
                     font=dict(size=11)),
-        height=380, **CHART_LAYOUT,
+        height=420, **CHART_LAYOUT,
     )
     return fig
 
@@ -601,44 +623,154 @@ def fig_liquidity_gauges() -> go.Figure:
 
 # ── NMD Charts ─────────────────────────────────────────────────────────────────
 
-def fig_nmd_unweighted_vs_weighted() -> go.Figure:
-    uw = NMD_UW[NMD_UW.factNumeric.notna()].copy()
-    w = NMD_W[NMD_W.factNumeric.notna()].copy()
-    if uw.empty and w.empty:
-        return go.Figure().update_layout(title="No NMD data available")
-    fig = go.Figure()
-    if not uw.empty:
-        fig.add_trace(go.Bar(
-            x=uw.short, y=uw.factNumeric / 1e9,
-            name="Unweighted (gross)", marker=dict(color=ZANDERS_LIGHT, cornerradius=4),
-            text=uw.factNumeric.apply(lambda v: f"€{v/1e9:,.1f}bn"),
-            textposition="outside", textfont=dict(size=10, color="#E0E0E0"),
-            hovertemplate="<b>%{x}</b><br>Unweighted: €%{y:,.2f}bn<extra></extra>",
-        ))
-    if not w.empty:
-        fig.add_trace(go.Bar(
-            x=w.short, y=w.factNumeric / 1e9,
-            name="Weighted (net outflow)", marker=dict(color=KBC_GREEN, cornerradius=4),
-            text=w.factNumeric.apply(lambda v: f"€{v/1e9:,.1f}bn"),
-            textposition="outside", textfont=dict(size=10, color="#E0E0E0"),
-            hovertemplate="<b>%{x}</b><br>Weighted: €%{y:,.2f}bn<extra></extra>",
-        ))
+# ── Leaf-level rows (non-overlapping sub-categories) ──────────────────────────
+_RETAIL_CHILDREN = [
+    "3. Stable deposits",
+    "4. Less stable deposits",
+]
+_WHOLESALE_CHILDREN = [
+    "6. Operational deposits all counterparties and deposits in networks of cooperative banks",
+    "7. Non-operational deposits all counterparties",
+    "8. Unsecured debt",
+]
+_LEAF_ROWS = _RETAIL_CHILDREN + _WHOLESALE_CHILDREN
+
+
+def fig_deposit_sunburst() -> go.Figure:
+    """Sunburst: Total Deposits → Retail / Wholesale → sub-categories."""
+    uw = NMD_UW[NMD_UW.factNumeric.notna()].set_index("rc")
+    if uw.empty:
+        return go.Figure().update_layout(title="No deposit data")
+
+    # Extract values
+    ret = uw.loc["2. Retail deposits and deposits from small business customers, of which:", "factNumeric"] / 1e9
+    ws = uw.loc["5. Unsecured wholesale funding", "factNumeric"] / 1e9
+    stable = uw.loc["3. Stable deposits", "factNumeric"] / 1e9 if "3. Stable deposits" in uw.index else 0
+    less_st = uw.loc["4. Less stable deposits", "factNumeric"] / 1e9 if "4. Less stable deposits" in uw.index else 0
+    other_ret = ret - stable - less_st
+    oper = uw.loc["6. Operational deposits all counterparties and deposits in networks of cooperative banks", "factNumeric"] / 1e9 if "6. Operational deposits all counterparties and deposits in networks of cooperative banks" in uw.index else 0
+    non_oper = uw.loc["7. Non-operational deposits all counterparties", "factNumeric"] / 1e9 if "7. Non-operational deposits all counterparties" in uw.index else 0
+    unsec_debt = uw.loc["8. Unsecured debt", "factNumeric"] / 1e9 if "8. Unsecured debt" in uw.index else 0
+    total = ret + ws
+
+    ids =     ["Total",    "Retail",  "Wholesale",  "Stable NMD", "Less Stable NMD", "Other Retail", "Operational",  "Non-Operational", "Unsecured Debt"]
+    labels =  [f"Total<br>€{total:,.0f}bn", f"Retail & SME<br>€{ret:,.0f}bn", f"Wholesale<br>€{ws:,.0f}bn",
+               f"Stable NMD<br>€{stable:,.0f}bn", f"Less Stable<br>€{less_st:,.0f}bn", f"Other Retail<br>€{other_ret:,.0f}bn",
+               f"Operational<br>€{oper:,.0f}bn", f"Non-Operational<br>€{non_oper:,.0f}bn", f"Unsecured Debt<br>€{unsec_debt:,.0f}bn"]
+    parents = ["",          "Total",   "Total",      "Retail",     "Retail",          "Retail",       "Wholesale",    "Wholesale",       "Wholesale"]
+    values =  [total,       ret,        ws,           stable,       less_st,           other_ret,      oper,           non_oper,          unsec_debt]
+    colors =  ["rgba(0,0,0,0)", ZANDERS_LIGHT, ZANDERS_BLUE,
+               KBC_GREEN, ACCENT_ORANGE, ACCENT_TEAL,
+               ACCENT_PURPLE, "#26A69A", SUBTLE_GRAY]
+
+    fig = go.Figure(go.Sunburst(
+        ids=ids, labels=labels, parents=parents, values=values,
+        branchvalues="total",
+        marker=dict(colors=colors, line=dict(color="rgba(0,0,0,0.4)", width=1.5)),
+        textfont=dict(size=11, color="white"),
+        hovertemplate="<b>%{label}</b><br>%{percentRoot:.1%} of total<extra></extra>",
+        insidetextorientation="radial",
+    ))
     fig.update_layout(
-        title=dict(text="LCR Deposit Outflows – Unweighted vs Weighted (Period T)",
+        title=dict(text="Deposit Hierarchy – Unweighted (Period T)",
+                   font=dict(size=15, color="#ffffff")),
+        height=480, margin=dict(l=10, r=10, t=50, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+    )
+    return fig
+
+
+def fig_nmd_unweighted_vs_weighted() -> go.Figure:
+    """UW vs W comparison using only leaf-level (non-overlapping) categories."""
+    # Use leaf rows + compute Other Retail as implied
+    uw_leaf = NMD_UW[NMD_UW.rc.isin(_LEAF_ROWS) & NMD_UW.factNumeric.notna()].copy()
+    w_leaf = NMD_W[NMD_W.rc.isin(_LEAF_ROWS) & NMD_W.factNumeric.notna()].copy()
+
+    # Add implied "Other Retail" row
+    ret_uw = NMD_UW[NMD_UW.rc.str.contains("Retail", na=False)]
+    stable_uw = NMD_UW[NMD_UW.rc == "3. Stable deposits"]
+    ls_uw = NMD_UW[NMD_UW.rc == "4. Less stable deposits"]
+    if len(ret_uw) and len(stable_uw) and len(ls_uw):
+        other_val = ret_uw.factNumeric.values[0] - stable_uw.factNumeric.values[0] - ls_uw.factNumeric.values[0]
+        if other_val > 0:
+            other_row = stable_uw.iloc[[0]].copy()
+            other_row["rc"] = "Other Retail"
+            other_row["short"] = "Other Retail"
+            other_row["factNumeric"] = other_val
+            uw_leaf = pd.concat([uw_leaf, other_row], ignore_index=True)
+
+    # Weighted "Other Retail"
+    ret_w = NMD_W[NMD_W.rc.str.contains("Retail", na=False)]
+    stable_w = NMD_W[NMD_W.rc == "3. Stable deposits"]
+    ls_w = NMD_W[NMD_W.rc == "4. Less stable deposits"]
+    if len(ret_w) and len(stable_w) and len(ls_w):
+        other_w_val = ret_w.factNumeric.values[0] - stable_w.factNumeric.values[0] - ls_w.factNumeric.values[0]
+        if other_w_val > 0:
+            other_w_row = stable_w.iloc[[0]].copy()
+            other_w_row["rc"] = "Other Retail"
+            other_w_row["short"] = "Other Retail"
+            other_w_row["factNumeric"] = other_w_val
+            w_leaf = pd.concat([w_leaf, other_w_row], ignore_index=True)
+
+    if uw_leaf.empty and w_leaf.empty:
+        return go.Figure().update_layout(title="No deposit data")
+
+    # Ensure short names
+    uw_leaf["short"] = uw_leaf["short"].fillna(uw_leaf.rc.map(_SHORT))
+    w_leaf["short"] = w_leaf["short"].fillna(w_leaf.rc.map(_SHORT))
+
+    # Order: retail children first, then wholesale children
+    order = ["Stable NMD", "Less Stable NMD", "Other Retail",
+             "Operational Deposits", "Non-Operational Deposits", "Unsecured Debt"]
+    uw_leaf["sort"] = uw_leaf.short.apply(lambda s: order.index(s) if s in order else 99)
+    w_leaf["sort"] = w_leaf.short.apply(lambda s: order.index(s) if s in order else 99)
+    uw_leaf = uw_leaf.sort_values("sort")
+    w_leaf = w_leaf.sort_values("sort")
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=uw_leaf.short, y=uw_leaf.factNumeric / 1e9,
+        name="Unweighted (gross)", marker=dict(color=ZANDERS_LIGHT, cornerradius=4),
+        text=uw_leaf.factNumeric.apply(lambda v: f"€{v/1e9:,.1f}bn"),
+        textposition="outside", textfont=dict(size=10, color="#E0E0E0"),
+        hovertemplate="<b>%{x}</b><br>Unweighted: €%{y:,.2f}bn<extra></extra>",
+    ))
+    fig.add_trace(go.Bar(
+        x=w_leaf.short, y=w_leaf.factNumeric / 1e9,
+        name="Weighted (outflow)", marker=dict(color=KBC_GREEN, cornerradius=4),
+        text=w_leaf.factNumeric.apply(lambda v: f"€{v/1e9:,.1f}bn"),
+        textposition="outside", textfont=dict(size=10, color="#E0E0E0"),
+        hovertemplate="<b>%{x}</b><br>Weighted: €%{y:,.2f}bn<extra></extra>",
+    ))
+
+    # Add parent group annotations
+    fig.add_vrect(x0=-0.5, x1=2.5, fillcolor=ZANDERS_LIGHT, opacity=0.04, line_width=0,
+                  annotation=dict(text="← Retail & SME →", font=dict(size=10, color="#78909C"),
+                                  yref="paper", y=0.98, showarrow=False))
+    fig.add_vrect(x0=2.5, x1=5.5, fillcolor=ZANDERS_BLUE, opacity=0.04, line_width=0,
+                  annotation=dict(text="← Wholesale →", font=dict(size=10, color="#78909C"),
+                                  yref="paper", y=0.98, showarrow=False))
+    fig.update_layout(
+        title=dict(text="LCR Outflows – Sub-Category Detail (Period T)",
                    font=dict(size=15, color="#ffffff")),
         yaxis=dict(title="EUR billions", gridcolor="rgba(255,255,255,0.06)"),
         xaxis=dict(gridcolor="rgba(255,255,255,0.06)"),
         barmode="group",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
                     font=dict(size=11)),
-        height=420, **CHART_LAYOUT,
+        height=480, **CHART_LAYOUT,
     )
     return fig
 
 
 def fig_nmd_outflow_rates() -> go.Figure:
-    uw = NMD_UW[NMD_UW.factNumeric.notna() & (NMD_UW.factNumeric > 0)].set_index("rc")
-    w = NMD_W[NMD_W.factNumeric.notna()].set_index("rc")
+    # Use only leaf rows (no parent totals) to avoid misleading rates
+    leaf_plus_parent = _LEAF_ROWS + [
+        "2. Retail deposits and deposits from small business customers, of which:",
+        "5. Unsecured wholesale funding",
+    ]
+    uw = NMD_UW[NMD_UW.factNumeric.notna() & (NMD_UW.factNumeric > 0) & NMD_UW.rc.isin(leaf_plus_parent)].set_index("rc")
+    w = NMD_W[NMD_W.factNumeric.notna() & NMD_W.rc.isin(leaf_plus_parent)].set_index("rc")
     common = uw.index.intersection(w.index)
     if common.empty:
         return go.Figure().update_layout(title="No outflow rate data")
@@ -724,31 +856,7 @@ def fig_nmd_trend(weighted: bool = False) -> go.Figure:
     return fig
 
 
-def fig_deposit_composition() -> go.Figure:
-    d = NMD_UW[NMD_UW.factNumeric.notna() & NMD_UW.rc.isin(_DEPOSIT_ROWS)].copy()
-    if d.empty:
-        return go.Figure().update_layout(title="No data")
-    fig = go.Figure(go.Pie(
-        labels=d.short, values=d.factNumeric / 1e9,
-        textinfo="label+percent", textfont=dict(size=11, color="white"),
-        marker=dict(
-            colors=[KBC_GREEN, ZANDERS_LIGHT, ACCENT_TEAL,
-                    ZANDERS_BLUE, ACCENT_ORANGE, ACCENT_PURPLE, "#26A69A"],
-            line=dict(color="rgba(0,0,0,0.3)", width=2),
-        ),
-        hole=0.4,
-        hovertemplate="<b>%{label}</b><br>€%{value:,.2f}bn (%{percent})<extra></extra>",
-    ))
-    fig.update_layout(
-        title=dict(text="Deposit Composition – Unweighted (Period T)",
-                   font=dict(size=15, color="#ffffff")),
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="top", y=-0.05, xanchor="center", x=0.5,
-                    font=dict(size=10, color="#B0BEC5")),
-        height=420, margin=dict(l=10, r=10, t=50, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-    )
-    return fig
+# fig_deposit_composition removed – replaced by fig_deposit_sunburst above
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -830,9 +938,9 @@ with tab_overview:
     # IRRBB
     st.subheader("Interest Rate Risk in the Banking Book")
     st.caption(
-        "EU IRRBB1 – Impact of prescribed interest rate shock scenarios on Economic Value of Equity (EVE) and Net Interest Income (NII). "
-        "Each bar shows how much KBC's EVE or NII would change under that specific scenario (e.g. parallel +200bp, short rates up). "
-        "Negative values = the bank loses value/income under that scenario."
+        "EU IRRBB1 – Sensitivities expressed as **% of Tier 1 capital** (€{t1:.1f}bn) to match the EBA Supervisory Outlier Test (SOT) format.  ·  "
+        "EVE SOT threshold: −15% of Tier 1 (red dashed). NII SOT threshold: −5% of Tier 1 (orange dotted).  ·  "
+        "Bars below a threshold line would trigger enhanced supervisory scrutiny.".format(t1=T1_ABS/1e9)
     )
     st.plotly_chart(fig_irrbb(), use_container_width=True)
 
@@ -894,13 +1002,13 @@ with tab_nmd:
     # Charts row 1
     st.subheader("Deposit Breakdown")
     st.caption(
-        "EU LIQ1 (K_73.00.c) – Left: compare gross deposit volumes (blue) against the regulatory stressed outflow (green) for each category. "
-        "The gap between the two bars shows how much the regulator expects to 'stick'.  ·  "
-        "Right: share of each deposit type in the total unweighted deposit base."
+        "EU LIQ1 (K_73.00.c) – **Left**: sunburst showing the deposit hierarchy: Total €241bn → Retail & SME / Wholesale → leaf sub-categories. "
+        "Click a segment to zoom in.  ·  "
+        "**Right**: gross volumes (blue) vs regulatory stressed outflow (green) for each **non-overlapping** sub-category."
     )
-    left, right = st.columns([7, 5])
-    left.plotly_chart(fig_nmd_unweighted_vs_weighted(), use_container_width=True)
-    right.plotly_chart(fig_deposit_composition(), use_container_width=True)
+    left, right = st.columns([5, 7])
+    left.plotly_chart(fig_deposit_sunburst(), use_container_width=True)
+    right.plotly_chart(fig_nmd_unweighted_vs_weighted(), use_container_width=True)
 
     # Explanation box
     col_left, col_right = st.columns(2)
