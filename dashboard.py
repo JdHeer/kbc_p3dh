@@ -207,8 +207,23 @@ _ov1 = DF[
     & (DF.col_label.str.contains("TREA|a\\.", na=False, regex=True))
 ].copy()
 _ov1["rc"] = _clean(_ov1["row_label"])
-_main_risks = _ov1[_ov1.rc.str.match(r"^\d+\.\s")].copy()
-_main_risks["label"] = _main_risks.rc.str.replace(r"^\d+\.\s+", "", regex=True)
+_all_risks = _ov1[_ov1.rc.str.match(r"^\d+\.\s")].copy()
+_all_risks["label"] = _all_risks.rc.str.replace(r"^\d+\.\s+", "", regex=True)
+_all_risks["is_of_which"] = _all_risks["label"].str.lower().str.startswith("of which")
+_all_risks["is_total"] = _all_risks["label"].str.lower().str.startswith("total")
+# Parent risk types: exclude "of which" sub-items and the Total row
+_main_risks = _all_risks[~_all_risks.is_of_which & ~_all_risks.is_total].copy()
+# Sub-items ("of which" rows) for the detail chart
+_sub_risks = _all_risks[_all_risks.is_of_which].copy()
+_sub_risks["label"] = _sub_risks["label"].str.replace(r"^[Oo]f which\s+", "", regex=True)
+
+# Build parent-child mapping for hover context
+_RWA_PARENT_MAP: dict[str, str] = {}
+for idx, row in _all_risks.iterrows():
+    if not row.is_of_which and not row.is_total:
+        current_parent = row.label
+    elif row.is_of_which:
+        _RWA_PARENT_MAP[row.label] = current_parent if current_parent else ""
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 3. CREDIT RISK RWEA FLOWS (EU CR8, k_28.00)
@@ -358,13 +373,13 @@ def fig_capital_ratios() -> go.Figure:
 
 
 def fig_rwa_breakdown() -> go.Figure:
+    """Main risk-type bars (excluding 'of which' sub-items and Total)."""
     data = _main_risks[_main_risks.factNumeric.notna() & (_main_risks.factNumeric > 0)].copy()
     if data.empty:
         return go.Figure()
     data["value_bn"] = data.factNumeric / 1e9
     data = data.sort_values("value_bn", ascending=True)
     n = len(data)
-    # Generate a gradient from teal to blue
     palette = [ACCENT_TEAL, ZANDERS_LIGHT, KBC_GREEN, ZANDERS_BLUE, ACCENT_PURPLE, ACCENT_ORANGE]
     colors = (palette * ((n // len(palette)) + 1))[:n]
     fig = go.Figure(go.Bar(
@@ -374,8 +389,53 @@ def fig_rwa_breakdown() -> go.Figure:
         marker=dict(color=colors, cornerradius=4, line=dict(width=0)),
         hovertemplate="<b>%{y}</b><br>€%{x:,.2f}bn<extra></extra>",
     ))
+    # Add total line
+    total = _all_risks[_all_risks.is_total]
+    if not total.empty:
+        tot_bn = total.factNumeric.values[0] / 1e9
+        fig.add_vline(x=tot_bn, line_dash="dash", line_color=SUBTLE_GRAY, line_width=1.5,
+                      annotation=dict(text=f"Total: €{tot_bn:,.1f}bn", font=dict(size=10, color=SUBTLE_GRAY),
+                                      bgcolor="rgba(144,164,174,0.15)", borderpad=3))
     fig.update_layout(
         title=dict(text="TREA by Risk Type (EU OV1)", font=dict(size=15, color="#ffffff")),
+        xaxis=dict(title="EUR billions", gridcolor="rgba(255,255,255,0.06)"),
+        yaxis_title="",
+        showlegend=False, height=380, **CHART_LAYOUT,
+    )
+    return fig
+
+
+def fig_rwa_of_which() -> go.Figure:
+    """'Of which' sub-breakdowns, shown with parent context."""
+    data = _sub_risks[_sub_risks.factNumeric.notna() & (_sub_risks.factNumeric > 0)].copy()
+    if data.empty:
+        return go.Figure().update_layout(
+            title="No 'of which' sub-items", **CHART_LAYOUT)
+    data["value_bn"] = data.factNumeric / 1e9
+    data["parent"] = data.label.map(_RWA_PARENT_MAP).fillna("")
+    data["display"] = data.apply(
+        lambda r: f"{r.parent[:25]}:<br>  {r.label[:35]}" if r.parent else r.label[:35], axis=1)
+    data = data.sort_values("value_bn", ascending=True)
+
+    # Color by parent category
+    parents = data.parent.unique()
+    parent_colors = {p: c for p, c in zip(parents, [ZANDERS_LIGHT, ACCENT_TEAL, KBC_GREEN,
+                                                     ACCENT_PURPLE, ACCENT_ORANGE, ZANDERS_BLUE])}
+    colors = [parent_colors.get(p, SUBTLE_GRAY) for p in data.parent]
+
+    fig = go.Figure(go.Bar(
+        x=data.value_bn, y=data.display, orientation="h",
+        text=data.value_bn.apply(lambda v: f"€{v:,.1f}bn"),
+        textposition="outside", textfont=dict(size=11, color="#E0E0E0"),
+        marker=dict(
+            color=colors, cornerradius=4,
+            line=dict(width=1, color="rgba(255,255,255,0.15)"),
+            pattern=dict(shape="/", solidity=0.15),
+        ),
+        hovertemplate="<b>%{y}</b><br>€%{x:,.2f}bn<extra></extra>",
+    ))
+    fig.update_layout(
+        title=dict(text="TREA Sub-Breakdowns ('of which')", font=dict(size=15, color="#ffffff")),
         xaxis=dict(title="EUR billions", gridcolor="rgba(255,255,255,0.06)"),
         yaxis_title="",
         showlegend=False, height=380, **CHART_LAYOUT,
@@ -745,15 +805,20 @@ with tab_overview:
 
     # RWA
     st.subheader("Risk-Weighted Exposure Amounts")
+    st.caption("EU OV1 – Parent risk types shown separately from 'of which' sub-breakdowns to avoid double-counting")
     left, right = st.columns(2)
     left.plotly_chart(fig_rwa_breakdown(), use_container_width=True)
-    right.plotly_chart(fig_cr8_waterfall(), use_container_width=True)
+    right.plotly_chart(fig_rwa_of_which(), use_container_width=True)
 
-    # Market Risk + IRRBB
-    st.subheader("Market Risk & IRRBB")
+    # RWA flows
+    st.subheader("RWEA Flow Analysis")
     left, right = st.columns(2)
-    left.plotly_chart(fig_mr2_total(), use_container_width=True)
-    right.plotly_chart(fig_irrbb(), use_container_width=True)
+    left.plotly_chart(fig_cr8_waterfall(), use_container_width=True)
+    right.plotly_chart(fig_mr2_total(), use_container_width=True)
+
+    # IRRBB
+    st.subheader("Interest Rate Risk in the Banking Book")
+    st.plotly_chart(fig_irrbb(), use_container_width=True)
 
     # Liquidity
     st.subheader("Liquidity Overview")
@@ -795,20 +860,35 @@ with tab_nmd:
     right.plotly_chart(fig_deposit_composition(), use_container_width=True)
 
     # Explanation box
-    st.info(
-        "**Unweighted vs Weighted – what does it mean?**\n\n"
-        "In the LCR framework, **unweighted** values are the gross (nominal) deposit amounts "
-        "reported by KBC. **Weighted** values are the *regulatory outflow amounts* after applying "
-        "EBA-prescribed run-off rates that reflect the likelihood of depositors withdrawing "
-        "funds during a 30-day stress scenario.\n\n"
-        "• **Stable NMD** (e.g. insured retail deposits in long-standing relationships) receive "
-        "a low outflow rate (typically 5%), meaning regulators assume most funds stay.\n"
-        "• **Less Stable NMD** (e.g. high-value or internet-only deposits) get a higher rate "
-        "(typically 10-15%), implying more expected outflows under stress.\n\n"
-        "The *outflow rate* = Weighted ÷ Unweighted. A lower rate means the deposits are "
-        "considered stickier and more favourable for the bank's LCR.",
-        icon="💡",
-    )
+    col_left, col_right = st.columns(2)
+    with col_left:
+        st.info(
+            "**Unweighted vs Weighted – what does it mean?**\n\n"
+            "In the LCR framework, **unweighted** values are the gross (nominal) deposit amounts "
+            "reported by KBC. **Weighted** values are the *regulatory outflow amounts* after applying "
+            "EBA-prescribed run-off rates that reflect the likelihood of depositors withdrawing "
+            "funds during a 30-day stress scenario.\n\n"
+            "• **Stable NMD** — low outflow rate (typically 5%): regulators assume most funds stay.\n"
+            "• **Less Stable NMD** — higher rate (typically 10–15%): more expected outflows under stress.\n\n"
+            "The *outflow rate* = Weighted ÷ Unweighted. A lower rate means the deposits are "
+            "considered stickier and more favourable for the bank's LCR.",
+            icon="💡",
+        )
+    with col_right:
+        st.info(
+            "**Stable NMDs & Behavioral Maturity**\n\n"
+            "Non-Maturing Deposits have no contractual maturity — in theory they could be withdrawn "
+            "overnight. However, **stable NMDs** are the portion to which banks may assign a "
+            "*behavioral repricing maturity longer than overnight* under EBA IRRBB guidelines.\n\n"
+            "Banks model the 'core' component of stable deposits with maturities up to **5 years**, "
+            "reflecting observed depositor behavior. This is critical for IRRBB because it determines "
+            "how much duration risk the bank carries on the liability side.\n\n"
+            "• **Stable** → long behavioral maturity → lower IRRBB sensitivity\n"
+            "• **Less stable** → shorter maturity assumed → higher repricing risk\n\n"
+            "The split directly impacts both the EVE and NII sensitivity metrics shown in the "
+            "Overview tab.",
+            icon="📐",
+        )
 
     # Charts row 2: outflow rates
     st.subheader("Outflow Rates")
