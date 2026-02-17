@@ -13,5 +13,10 @@ wheels/
 *.pdf
 deploy.zip
 
-# Raw source data (rebuild with: uv run python ingest.py)
-P3DH downloads/*.csv
+# Database (rebuild with: uv run python ingest_p3dh.py "P3DH downloads")
+*.db
+
+# Raw source data
+P3DH downloads/
+Credit Risk/
+Mapping/
